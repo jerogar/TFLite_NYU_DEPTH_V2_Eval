@@ -22,6 +22,8 @@ The official website is:
      unzip nyu_test.zip 
     ```
     
+    - convert *.npy to image and csv gt files using "res/convert_nyu_test.py" 
+    
 - Build
 
     ```bash
