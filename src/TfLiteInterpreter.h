@@ -39,31 +39,15 @@ protected:
 // *******************************************************************************
 
 // reference model https://tfhub.dev/intel/midas/v2/2
-
-static constexpr int MIDAS_DEFAULT_IN_COLS = 384; // small 256
-static constexpr int MIDAS_DEFAULT_IN_ROWS = 384;
-static constexpr int MIDAS_DEFAULT_IN_CH = 3;
-
-static constexpr int NUM_NYUDEPTHV2_TEST_SET = 654;
-
-static cv::Scalar MIDAS_DEFAULT_MEAN = cv::Scalar(0.485, 0.456, 0.406);
-static cv::Scalar MIDAS_DEFAULT_STD = cv::Scalar(0.229, 0.224, 0.225);
-
 class CTfLiteDepthEstimation : public CTfLiteInterpreter
 {
 public:
-    CTfLiteDepthEstimation()
-            : CTfLiteInterpreter(MIDAS_DEFAULT_IN_COLS, MIDAS_DEFAULT_IN_ROWS, MIDAS_DEFAULT_IN_CH),
-              m_mean(MIDAS_DEFAULT_MEAN), m_std(MIDAS_DEFAULT_STD) {}
-    CTfLiteDepthEstimation(int width, int height, int ch)
-            : CTfLiteInterpreter(width, height, ch),
-              m_mean(MIDAS_DEFAULT_MEAN), m_std(MIDAS_DEFAULT_STD) {}
-    CTfLiteDepthEstimation(int width, int height, int ch, cv::Scalar mean, cv::Scalar std)
-            : CTfLiteInterpreter(width, height, ch),
-              m_mean(mean), m_std(std) {}
+    CTfLiteDepthEstimation();
+    CTfLiteDepthEstimation(int width, int height, int ch);
+    CTfLiteDepthEstimation(int width, int height, int ch, cv::Scalar mean, cv::Scalar std);
 
-    virtual cv::Mat Run(const std::string& strImgPath);
-    void Evaluate(const std::string& strDbPath, const std::string& strSavePath);
+    virtual cv::Mat Run(const std::string& strImgPath, bool isInvertScale);
+    void Evaluate(const std::string& strDbPath, const std::string& strSavePath, bool isInvertScale = false);
     cv::Mat DrawDepth(const cv::Mat& depthMat);
 
 private:
@@ -72,6 +56,7 @@ private:
 
     float GetAbsRel(const cv::Mat& predict, const cv::Mat& gt);
     float GetRmsError(const cv::Mat& predict, const cv::Mat& gt);
+    float GetSiRmsError(const cv::Mat& predict, const cv::Mat& gt);
 
     cv::Scalar m_mean;
     cv::Scalar m_std;
@@ -79,4 +64,3 @@ private:
 // *******************************************************************************
 
 #endif //TFLITEINTERPRETER_H
-

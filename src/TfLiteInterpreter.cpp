@@ -86,7 +86,27 @@ std::vector<int> CTfLiteInterpreter::GetSortedIndex(int numElement, float* pData
 }
 
 // *******************************************************************************
-cv::Mat CTfLiteDepthEstimation::Run(const std::string& strImgPath)
+
+static constexpr int MIDAS_DEFAULT_IN_COLS = 384; // small 256
+static constexpr int MIDAS_DEFAULT_IN_ROWS = 384; // small 256
+static constexpr int MIDAS_DEFAULT_IN_CH = 3;
+
+static constexpr int NUM_NYUDEPTHV2_TEST_SET = 654;
+
+static cv::Scalar MIDAS_DEFAULT_MEAN = cv::Scalar(0.485, 0.456, 0.406);
+static cv::Scalar MIDAS_DEFAULT_STD = cv::Scalar(0.229, 0.224, 0.225);
+
+CTfLiteDepthEstimation::CTfLiteDepthEstimation()
+        : CTfLiteInterpreter(MIDAS_DEFAULT_IN_COLS, MIDAS_DEFAULT_IN_ROWS, MIDAS_DEFAULT_IN_CH),
+          m_mean(MIDAS_DEFAULT_MEAN), m_std(MIDAS_DEFAULT_STD) {}
+CTfLiteDepthEstimation::CTfLiteDepthEstimation(int width, int height, int ch)
+        : CTfLiteInterpreter(width, height, ch),
+          m_mean(MIDAS_DEFAULT_MEAN), m_std(MIDAS_DEFAULT_STD) {}
+CTfLiteDepthEstimation::CTfLiteDepthEstimation(int width, int height, int ch, cv::Scalar mean, cv::Scalar std)
+        : CTfLiteInterpreter(width, height, ch),
+          m_mean(mean), m_std(std) {}
+
+cv::Mat CTfLiteDepthEstimation::Run(const std::string& strImgPath, bool isInvertScale)
 {
     // Step 1. Load Image
     cv::Mat inputImg = cv::imread(strImgPath);
@@ -105,8 +125,14 @@ cv::Mat CTfLiteDepthEstimation::Run(const std::string& strImgPath)
     cv::Mat depthMat(m_inHeight, m_inWidth, CV_32FC1, pOutputData);
     cv::resize(depthMat, depthMat, inputImg.size(), 0, 0, CV_INTER_CUBIC);
 
-    depthMat = 1 / depthMat;
+    if (isInvertScale)
+    {
+        double min;
+        double max;
+        cv::minMaxIdx(depthMat, &min, &max);
 
+        depthMat = (1 / depthMat) * max;
+    }
     return std::move(depthMat);
 }
 
@@ -125,10 +151,11 @@ cv::Mat CTfLiteDepthEstimation::DrawDepth(const cv::Mat& depthMat)
     return std::move(normDepthMat);
 }
 
-void CTfLiteDepthEstimation::Evaluate(const std::string& strDbPath, const std::string& strSavePath)
+void CTfLiteDepthEstimation::Evaluate(const std::string& strDbPath, const std::string& strSavePath, bool isInvertScale)
 {
     double averageAbsRel = 0.0;
     double averageRmse = 0.0;
+    double averageSiRmse = 0.0;
 
     for (int iter = 0; iter < NUM_NYUDEPTHV2_TEST_SET; iter++)
     {
@@ -153,13 +180,13 @@ void CTfLiteDepthEstimation::Evaluate(const std::string& strDbPath, const std::s
 
         cv::Mat srcImg = cv::imread(path2);
 
-	// Step 3. Prediction
-        cv::Mat predictMat = Run(path2);
+        // Step 3. Prediction
+        cv::Mat predictMat = Run(path2, isInvertScale);
         ostr.str("");
         ostr.clear();
 
 
-	// Step 4. Save Result
+        // Step 4. Save Result
         ostr << strSavePath << "/res_pred_gt" << std::setfill('0') << std::setw(5)
              << std::to_string(iter) << ".jpg";
         cv::Mat resMat;
@@ -169,18 +196,21 @@ void CTfLiteDepthEstimation::Evaluate(const std::string& strDbPath, const std::s
         ostr.str("");
         ostr.clear();
 
-	// Step 5. performance
+        // Step 5. performance
         float absRel = GetAbsRel(predictMat, depthMat);
-        float Rmse = GetRmsError(predictMat, depthMat);
+        float rmse = GetRmsError(predictMat, depthMat);
+        float siRmse = GetSiRmsError(predictMat, depthMat);
 
         averageAbsRel += absRel / NUM_NYUDEPTHV2_TEST_SET;
-        averageRmse += Rmse / NUM_NYUDEPTHV2_TEST_SET;
+        averageRmse += rmse / NUM_NYUDEPTHV2_TEST_SET;
+        averageSiRmse += siRmse / NUM_NYUDEPTHV2_TEST_SET;
 
-        std::cout << "DB " << iter << "-> " << "AbsRel: " << absRel << ", RMSE: " << Rmse << "\n";
+        std::cout << "DB " << iter << "-> " << "AbsRel: " << absRel << ", RMSE: " << rmse << ", Si-RMSE: " << siRmse
+                  << "\n";
     }
 
-    std::cout << "Average-> AbsRel: " << averageAbsRel << ", RMSE: " << averageRmse << "\n";
-
+    std::cout << "Average-> AbsRel: " << averageAbsRel << ", RMSE: " << averageRmse << ", Si-RMSE: " << averageSiRmse
+              << "\n";
 }
 float CTfLiteDepthEstimation::GetAbsRel(const cv::Mat& predict, const cv::Mat& gt)
 {
@@ -194,6 +224,24 @@ float CTfLiteDepthEstimation::GetRmsError(const cv::Mat& predict, const cv::Mat&
     cv::Scalar mse = cv::mean(subMat.mul(subMat));
 
     return cv::sqrt(mse[0]);
+}
+
+float CTfLiteDepthEstimation::GetSiRmsError(const cv::Mat& predict, const cv::Mat& gt)
+{
+    cv::Mat logPredict;
+    cv::log(predict, logPredict);
+
+    cv::Mat logGt;
+    cv::log(gt, logGt);
+
+    cv::Mat logDiffMat = logPredict - logGt;
+    cv::Scalar alpha = cv::sum(logDiffMat.mul(logDiffMat)) / (predict.cols * predict.rows);
+
+    cv::Mat valMat = logGt - logPredict + alpha[0];
+    cv::Scalar mse = cv::sum(valMat.mul(valMat)) / (predict.cols * predict.rows);
+
+    return cv::sqrt(mse[0]);
+
 }
 
 cv::Mat CTfLiteDepthEstimation::LoadNyuDepthGtFromCsv(std::string& strGtPath)
@@ -227,4 +275,3 @@ cv::Mat CTfLiteDepthEstimation::LoadNyuDepthGtFromCsv(std::string& strGtPath)
 
     return std::move(depthMat);
 }
-

@@ -8,6 +8,7 @@ int main(int argc, char* argv[])
     std::string strModelPath = "../res/model_float32.tflite";
     std::string strNyuDepthPath = "../res/DenseDepth";
     std::string strSavePath = "../res/result";
+    bool isInvertScale = true;
 
     for (int idx = 0; idx < argc - 1; idx++)
     {
@@ -23,6 +24,11 @@ int main(int argc, char* argv[])
         {
             strSavePath = argv[idx + 1];
         }
+        if (strcmp(argv[idx], "-invertScale") == 0)
+        {
+            int temp = atoi(argv[idx + 1]);
+            isInvertScale = (temp > 0) ? true : false;
+        }
     }
 
     std::cout << "Model: " << strModelPath << "\n";
@@ -30,7 +36,7 @@ int main(int argc, char* argv[])
     // Run Model
     std::unique_ptr <CTfLiteDepthEstimation> pDepthEstimator = std::make_unique<CTfLiteDepthEstimation>();
     pDepthEstimator->LoadModel(strModelPath);
-    pDepthEstimator->Evaluate(strNyuDepthPath, strSavePath);
+    pDepthEstimator->Evaluate(strNyuDepthPath, strSavePath, isInvertScale);
 
     return 0;
 }
