@@ -58,6 +58,9 @@ private:
     float GetRmsError(const cv::Mat& predict, const cv::Mat& gt);
     float GetSiRmsError(const cv::Mat& predict, const cv::Mat& gt);
 
+	template <typename T>
+	cv::Mat GetLogMat(const cv::Mat& srcImg);
+
     cv::Scalar m_mean;
     cv::Scalar m_std;
 };

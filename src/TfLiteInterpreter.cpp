@@ -226,13 +226,32 @@ float CTfLiteDepthEstimation::GetRmsError(const cv::Mat& predict, const cv::Mat&
     return cv::sqrt(mse[0]);
 }
 
+template <typename T>
+cv::Mat CTfLiteDepthEstimation::GetLogMat(const cv::Mat& srcImg)
+{
+	cv::Mat targetImg = srcImg.clone();
+	
+	T* dataPtr = (T*)targetImg.data;
+	int widthStep = targetImg.step1(); 
+	for(int k =0; k <srcImg.rows; k++)
+	{
+		int rowIdx = k* widthStep;
+		for(int q =0; q <srcImg.cols; q++)
+		{
+			if(dataPtr[rowIdx +q] <1.0f)
+				dataPtr[rowIdx +q] = 1.0f;
+		}
+	}
+
+	cv::log(targetImg, targetImg);
+
+	return std::move(targetImg);	
+}
+
 float CTfLiteDepthEstimation::GetSiRmsError(const cv::Mat& predict, const cv::Mat& gt)
 {
-    cv::Mat logPredict;
-    cv::log(predict, logPredict);
-
-    cv::Mat logGt;
-    cv::log(gt, logGt);
+    cv::Mat logPredict = GetLogMat<float>(predict);
+    cv::Mat logGt = GetLogMat<float>(gt);
 
     cv::Mat logDiffMat = logPredict - logGt;
     cv::Scalar alpha = cv::sum(logDiffMat.mul(logDiffMat)) / (predict.cols * predict.rows);

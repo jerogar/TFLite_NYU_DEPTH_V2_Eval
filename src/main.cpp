@@ -5,7 +5,7 @@
 
 int main(int argc, char* argv[])
 {
-    std::string strModelPath = "../res/model_float32.tflite";
+    std::string strModelPath = "../res/lite-model_midas_v2_1_small_1_lite_1.tflite";
     std::string strNyuDepthPath = "../res/DenseDepth";
     std::string strSavePath = "../res/result";
     bool isInvertScale = true;
